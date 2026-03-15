@@ -8,7 +8,7 @@ a sample-based benjolin for [norns](https://monome.org/docs/norns/). two samples
 
 Rob Hordijk's Benjolin uses two oscillators cross-modulating through a shift register. grainrungler replaces those oscillators with granular sample playback. sample A provides DATA for the shift register. sample B provides the CLOCK. the resulting chaotic "stepped havoc wave" feeds back into both samples' rate, position, and the filter.
 
-additionally, the two samples cross-modulate each other: A's amplitude shapes B's rate (and vice versa), plus FM cross-modulation for truly organic timbral interaction.
+additionally, the two samples cross-modulate each other: A's amplitude shapes B's rate (and vice versa), plus FM cross-modulation for timbral interaction.
 
 ```
 SAMPLE A (BufRd) ─── pulse ──→ DATA ──┐
@@ -32,7 +32,6 @@ SAMPLE B (BufRd) ─── pulse ──→ CLOCK ─┘
 
 ## features
 
-- **SC engine**: all audio in SuperCollider — BufRd granular, shift register, filter, delay. no softcut limitations.
 - **twin peak filter**: LP/BP/HP/Twin Peak with rungler-modulated cutoff
 - **delay with mix**: dry/wet control (not send), rungler-modulated time
 - **4 cross-mod paths**: A↔B amplitude cross-mod + A↔B FM cross-mod
@@ -62,7 +61,6 @@ SAMPLE B (BufRd) ─── pulse ──→ CLOCK ─┘
 
 - norns (shield, standard, or fates)
 - audio samples (wav/aif) in dust/audio
-- no sc3-plugins needed (vanilla SuperCollider UGens only)
 
 ## install
 
