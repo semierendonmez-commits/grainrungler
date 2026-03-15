@@ -1,6 +1,6 @@
 # grainrungler
 
-a sample-based benjolin for [norns](https://monome.org/docs/norns/). two samples replace two oscillators. the rungler shift register drives everything into chaos. your samples become alive.
+a sample-based benjolin for [norns](https://monome.org/docs/norns/). two samples replace two oscillators. the rungler shift register drives everything.
 
 ---
 
