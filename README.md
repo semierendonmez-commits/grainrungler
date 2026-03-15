@@ -67,7 +67,7 @@ SAMPLE B (BufRd) ─── pulse ──→ CLOCK ─┘
 ## install
 
 ```
-;install https://github.com/semierendonmez-commits/grainrungler
+;install https://github.com/semi/grainrungler
 ```
 
 ## license

@@ -1,11 +1,6 @@
--- grainrungler.lua
--- sample-based benjolin. SC engine handles everything.
--- BufRd grain playback, shift register, twin peak filter, delay.
---
--- E1: scroll params (K1+E1: page)
--- E2: selected, E3: next
--- K2: toggle A/B
--- K3: load sample / randomize
+-- grainrungler.lua v2
+-- sample-based benjolin with true phase modulation
+-- SC engine: BufRd granular + shift register + twin peak + comb + delay
 
 engine.name = "GrainRungler"
 
@@ -16,31 +11,33 @@ local PP = {
   [1] = { -- GRAINS
     {"pos_a","pos A"},{"rate_a","rate A"},{"grain_a","grain A"},{"level_a","lvl A"},
     {"atk_a","atk A"},{"rel_a","rel A"},
+    {"jitter_a","jit A"},{"density_a","den A"},
     {"pos_b","pos B"},{"rate_b","rate B"},{"grain_b","grain B"},{"level_b","lvl B"},
     {"atk_b","atk B"},{"rel_b","rel B"},
+    {"jitter_b","jit B"},{"density_b","den B"},
     {"spread","spread"},
   },
   [2] = { -- RUNGLER
     {"run_a","Run A"},{"run_b","Run B"},{"run_f","Run F"},
-    {"chaos","chaos"},{"loop_len","length"},
-    {"gate_thresh","gate"},
+    {"chaos","chaos"},{"loop_len","length"},{"gate_thresh","gate"},
   },
-  [3] = { -- FILTER
+  [3] = { -- CROSS-MOD
+    {"xmod_pm_ab","A>B phase"},{"xmod_pm_ba","B>A phase"},
+    {"xmod_amp_ab","A>B amp"},{"xmod_amp_ba","B>A amp"},
+  },
+  [4] = { -- FILTER
     {"filt_freq","cutoff"},{"filt_res","res"},
-    {"filt_type","type"},{"filt_peak2","peak2"},{"filt_mix","mix"},
+    {"filt_type","type"},{"filt_peak2","peak2"},{"filt_mix","filt mix"},
+    {"comb_freq","comb Hz"},{"comb_fb","comb fb"},{"comb_mix","comb mix"},
   },
-  [4] = { -- FX
-    {"xmod_ab","A>B amp"},{"xmod_ba","B>A amp"},
-    {"xmod_fm_ab","A>B FM"},{"xmod_fm_ba","B>A FM"},
+  [5] = { -- FX
     {"dly_time","delay"},{"dly_fb","dly fb"},{"dly_mix","dly mix"},{"cv_dly","cv>dly"},
+    {"pan_mode","pan mode"},{"pan_width","pan width"},
     {"amp","volume"},
   },
 }
-local sel = {1,1,1,1}
-
--- poll data for UI
-local poll_rung = 0
-local poll_amp = 0
+local sel = {1,1,1,1,1}
+local poll_rung, poll_amp = 0, 0
 
 function init()
   params:add_separator("gr_h","g r a i n r u n g l e r")
@@ -64,39 +61,58 @@ function init()
   params:add_separator("gr_a","sample A (data)")
   params:add_file("sample_a","sample A",_path.audio)
   params:set_action("sample_a",function(v)
-    if v and v ~= "" and v ~= _path.audio then engine.load_a(v) end
+    if v and v~="" and v~=_path.audio then engine.load_a(v) end
   end)
-  params:add_control("pos_a","position A",controlspec.new(0,1,'lin',0,0,''))
+  params:add_control("pos_a","position",controlspec.new(0,1,'lin',0,0,''))
   params:set_action("pos_a",function(v) engine.pos_a(v) end)
-  params:add_control("rate_a","rate A",controlspec.new(-4,4,'lin',0,1,'x'))
+  params:add_control("rate_a","rate",controlspec.new(-4,4,'lin',0,1,'x'))
   params:set_action("rate_a",function(v) engine.rate_a(v) end)
-  params:add_control("grain_a","grain A",controlspec.new(0.02,2,'exp',0,0.12,'s'))
+  params:add_control("grain_a","grain size",controlspec.new(0.02,2,'exp',0,0.12,'s'))
   params:set_action("grain_a",function(v) engine.grain_a(v) end)
-  params:add_control("level_a","level A",controlspec.new(0,1,'lin',0,0.8,''))
+  params:add_control("level_a","level",controlspec.new(0,1,'lin',0,0.8,''))
   params:set_action("level_a",function(v) engine.level_a(v) end)
-  params:add_control("atk_a","attack A",controlspec.new(0.001,0.5,'exp',0,0.01,'s'))
+  params:add_control("atk_a","attack",controlspec.new(0.001,0.5,'exp',0,0.01,'s'))
   params:set_action("atk_a",function(v) engine.atk_a(v) end)
-  params:add_control("rel_a","release A",controlspec.new(0.001,0.5,'exp',0,0.05,'s'))
+  params:add_control("rel_a","release",controlspec.new(0.001,0.5,'exp',0,0.05,'s'))
   params:set_action("rel_a",function(v) engine.rel_a(v) end)
+  params:add_control("jitter_a","jitter",controlspec.new(0,500,'lin',0,0,'ms'))
+  params:set_action("jitter_a",function(v) engine.jitter_a(v) end)
+  params:add_control("density_a","density",controlspec.new(1,200,'exp',0,20,'Hz'))
+  params:set_action("density_a",function(v) engine.density_a(v) end)
 
   -- sample B
   params:add_separator("gr_b","sample B (clock)")
   params:add_file("sample_b","sample B",_path.audio)
   params:set_action("sample_b",function(v)
-    if v and v ~= "" and v ~= _path.audio then engine.load_b(v) end
+    if v and v~="" and v~=_path.audio then engine.load_b(v) end
   end)
-  params:add_control("pos_b","position B",controlspec.new(0,1,'lin',0,0,''))
+  params:add_control("pos_b","position",controlspec.new(0,1,'lin',0,0,''))
   params:set_action("pos_b",function(v) engine.pos_b(v) end)
-  params:add_control("rate_b","rate B",controlspec.new(-4,4,'lin',0,0.25,'x'))
+  params:add_control("rate_b","rate",controlspec.new(-4,4,'lin',0,0.25,'x'))
   params:set_action("rate_b",function(v) engine.rate_b(v) end)
-  params:add_control("grain_b","grain B",controlspec.new(0.02,2,'exp',0,0.2,'s'))
+  params:add_control("grain_b","grain size",controlspec.new(0.02,2,'exp',0,0.2,'s'))
   params:set_action("grain_b",function(v) engine.grain_b(v) end)
-  params:add_control("level_b","level B",controlspec.new(0,1,'lin',0,0.8,''))
+  params:add_control("level_b","level",controlspec.new(0,1,'lin',0,0.8,''))
   params:set_action("level_b",function(v) engine.level_b(v) end)
-  params:add_control("atk_b","attack B",controlspec.new(0.001,0.5,'exp',0,0.01,'s'))
+  params:add_control("atk_b","attack",controlspec.new(0.001,0.5,'exp',0,0.01,'s'))
   params:set_action("atk_b",function(v) engine.atk_b(v) end)
-  params:add_control("rel_b","release B",controlspec.new(0.001,0.5,'exp',0,0.05,'s'))
+  params:add_control("rel_b","release",controlspec.new(0.001,0.5,'exp',0,0.05,'s'))
   params:set_action("rel_b",function(v) engine.rel_b(v) end)
+  params:add_control("jitter_b","jitter",controlspec.new(0,500,'lin',0,0,'ms'))
+  params:set_action("jitter_b",function(v) engine.jitter_b(v) end)
+  params:add_control("density_b","density",controlspec.new(1,200,'exp',0,20,'Hz'))
+  params:set_action("density_b",function(v) engine.density_b(v) end)
+
+  -- cross-mod
+  params:add_separator("gr_x","cross-modulation")
+  params:add_control("xmod_pm_ab","A>B phase mod",controlspec.new(0,1,'lin',0,0,''))
+  params:set_action("xmod_pm_ab",function(v) engine.xmod_pm_ab(v) end)
+  params:add_control("xmod_pm_ba","B>A phase mod",controlspec.new(0,1,'lin',0,0,''))
+  params:set_action("xmod_pm_ba",function(v) engine.xmod_pm_ba(v) end)
+  params:add_control("xmod_amp_ab","A>B amp mod",controlspec.new(0,1,'lin',0,0,''))
+  params:set_action("xmod_amp_ab",function(v) engine.xmod_amp_ab(v) end)
+  params:add_control("xmod_amp_ba","B>A amp mod",controlspec.new(0,1,'lin',0,0,''))
+  params:set_action("xmod_amp_ba",function(v) engine.xmod_amp_ba(v) end)
 
   -- filter
   params:add_separator("gr_f","filter")
@@ -111,16 +127,17 @@ function init()
   params:add_control("filt_mix","filter mix",controlspec.new(0,1,'lin',0,0.8,''))
   params:set_action("filt_mix",function(v) engine.filt_mix(v) end)
 
-  -- cross-mod + fx
-  params:add_separator("gr_x","cross-mod & effects")
-  params:add_control("xmod_ab","A>B amp mod",controlspec.new(0,1,'lin',0,0,''))
-  params:set_action("xmod_ab",function(v) engine.xmod_ab(v) end)
-  params:add_control("xmod_ba","B>A amp mod",controlspec.new(0,1,'lin',0,0,''))
-  params:set_action("xmod_ba",function(v) engine.xmod_ba(v) end)
-  params:add_control("xmod_fm_ab","A>B FM",controlspec.new(0,1,'lin',0,0,''))
-  params:set_action("xmod_fm_ab",function(v) engine.xmod_fm_ab(v) end)
-  params:add_control("xmod_fm_ba","B>A FM",controlspec.new(0,1,'lin',0,0,''))
-  params:set_action("xmod_fm_ba",function(v) engine.xmod_fm_ba(v) end)
+  -- comb
+  params:add_separator("gr_comb","comb filter")
+  params:add_control("comb_freq","comb freq",controlspec.new(20,2000,'exp',0,200,'Hz'))
+  params:set_action("comb_freq",function(v) engine.comb_freq(v) end)
+  params:add_control("comb_fb","comb feedback",controlspec.new(0,0.95,'lin',0,0,''))
+  params:set_action("comb_fb",function(v) engine.comb_fb(v) end)
+  params:add_control("comb_mix","comb mix",controlspec.new(0,1,'lin',0,0,''))
+  params:set_action("comb_mix",function(v) engine.comb_mix(v) end)
+
+  -- fx
+  params:add_separator("gr_fx","delay & pan")
   params:add_control("dly_time","delay time",controlspec.new(0,2,'lin',0,0,'s'))
   params:set_action("dly_time",function(v) engine.dly_time(v) end)
   params:add_control("dly_fb","delay fb",controlspec.new(0,0.9,'lin',0,0,''))
@@ -129,6 +146,10 @@ function init()
   params:set_action("dly_mix",function(v) engine.dly_mix(v) end)
   params:add_control("cv_dly","cv > delay",controlspec.new(0,2,'lin',0,0,''))
   params:set_action("cv_dly",function(v) engine.cv_dly(v) end)
+  params:add_option("pan_mode","pan mode",{"static","rungler","random"},1)
+  params:set_action("pan_mode",function(v) engine.pan_mode(v-1) end)
+  params:add_control("pan_width","pan width",controlspec.new(0,1,'lin',0,0.5,''))
+  params:set_action("pan_width",function(v) engine.pan_width(v) end)
 
   params:add_control("spread","spread",controlspec.new(0,1,'lin',0,0.5,''))
   params:set_action("spread",function(v) engine.spread(v) end)
@@ -137,59 +158,51 @@ function init()
 
   UI.init(PP, sel)
 
-  -- polls
   local pr = poll.set("poll_rung")
-  pr.callback = function(v) poll_rung = v; UI.poll_rung = v end
-  pr.time = 1/30; pr:start()
+  pr.callback = function(v) poll_rung=v; UI.poll_rung=v end
+  pr.time=1/30; pr:start()
   local pa = poll.set("poll_amp")
-  pa.callback = function(v) poll_amp = v; UI.poll_amp = v end
-  pa.time = 1/30; pa:start()
+  pa.callback = function(v) poll_amp=v; UI.poll_amp=v end
+  pa.time=1/30; pa:start()
   clocks.polls = {pr, pa}
 
   clocks[1] = clock.run(function()
-    while true do clock.sleep(1/15); UI.push_scope(poll_rung, 0); redraw() end
+    while true do clock.sleep(1/15); UI.push_scope(poll_rung); redraw() end
   end)
 
   params:bang()
 end
 
 function enc(n, d)
-  if n == 1 then
-    if UI.k1_held then
-      UI.page = util.clamp(UI.page + d, 1, UI.NUM_PAGES)
+  if n==1 then
+    if UI.k1_held then UI.page=util.clamp(UI.page+d,1,UI.NUM_PAGES)
     else
-      local list = PP[UI.page]
-      if list then sel[UI.page] = util.clamp(sel[UI.page] + d, 1, #list) end
+      local list=PP[UI.page]
+      if list then sel[UI.page]=util.clamp(sel[UI.page]+d,1,#list) end
     end
-  elseif n == 2 then
-    local list = PP[UI.page]
-    if list and list[sel[UI.page]] then params:delta(list[sel[UI.page]][1], d) end
-  elseif n == 3 then
-    local list = PP[UI.page]
-    local ni = sel[UI.page] + 1
-    if list and list[ni] then params:delta(list[ni][1], d) end
+  elseif n==2 then
+    local list=PP[UI.page]
+    if list and list[sel[UI.page]] then params:delta(list[sel[UI.page]][1],d) end
+  elseif n==3 then
+    local list=PP[UI.page]; local ni=sel[UI.page]+1
+    if list and list[ni] then params:delta(list[ni][1],d) end
   end
 end
 
 function key(n, z)
-  if n == 1 then UI.k1_held = (z == 1)
-  elseif n == 2 and z == 1 then
-    UI.sel_smp = UI.sel_smp == "A" and "B" or "A"
-  elseif n == 3 and z == 1 then
-    if UI.page == 1 then
+  if n==1 then UI.k1_held=(z==1)
+  elseif n==2 and z==1 then UI.sel_smp=UI.sel_smp=="A" and "B" or "A"
+  elseif n==3 and z==1 then
+    if UI.page==1 then
       fileselect.enter(_path.audio, function(p)
-        if p and p ~= "cancel" then
-          params:set("sample_" .. string.lower(UI.sel_smp), p)
-        end
+        if p and p~="cancel" then params:set("sample_"..string.lower(UI.sel_smp),p) end
       end)
     else
-      local list = PP[UI.page]
-      if list then
-        for _, e in ipairs(list) do
-          local p = params:lookup_param(e[1])
-          if p and p.t == 3 then params:set_raw(e[1], math.random()) end
-        end
-      end
+      local list=PP[UI.page]
+      if list then for _,e in ipairs(list) do
+        local p=params:lookup_param(e[1])
+        if p and p.t==3 then params:set_raw(e[1],math.random()) end
+      end end
     end
   end
 end
