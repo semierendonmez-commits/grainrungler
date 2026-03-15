@@ -59,7 +59,7 @@ SAMPLE B grains ─── CLOCK ──┘                                      �
 ## install
 
 ```
-;install https://github.com/semi/grainrungler
+;install https://github.com/semierendonmez-commits/grainrungler
 ```
 
 ## requirements
