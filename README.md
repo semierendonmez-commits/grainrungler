@@ -49,13 +49,13 @@ SAMPLE B (BufRd) ─── pulse ──→ CLOCK ─┘
 
 ## pages
 
-**GRAINS** — dual sample display with unique waveforms, position markers, grain windows, cross-mod indicators
+**GRAINS** — dual sample display with waveforms, position markers, grain windows, cross-mod indicators
 
 **RUNGLER** — CV bar with threshold, chaos mode, run depths, CV history trace
 
-**FILTER** — filter curve with twin peak support, real-time cutoff modulation, mix indicator
+**FILTER** — filter curve with twin peak support, cutoff modulation, mix indicator
 
-**FX** — cross-modulation depths (amp + FM), delay params with mix and CV modulation
+**FX** — cross-modulation depths (amp + FM), delay params with mix and modulation
 
 ## requirements
 
